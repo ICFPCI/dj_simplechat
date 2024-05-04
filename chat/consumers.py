@@ -3,8 +3,8 @@ from channels.db import database_sync_to_async
 from asgiref.sync import sync_to_async, async_to_sync
 import json
 
-from .models import Message
-from .serializers import MessageSerializer
+from .models import Conversation, Message
+from .serializers import ArchivedConversationSerializer, MessageSerializer
 
 
 class Consumer(AsyncJsonWebsocketConsumer):
@@ -27,9 +27,7 @@ class Consumer(AsyncJsonWebsocketConsumer):
 
         serialized_message = MessageSerializer(message).data
 
-        print("antes???")
         for user in message.conversation.users.all():
-            print("hola????")
             async_to_sync(self.channel_layer.group_send)(
                 str(user.id),
                 {
@@ -38,6 +36,27 @@ class Consumer(AsyncJsonWebsocketConsumer):
                     "data": serialized_message,
                 },
             )
+
+    @database_sync_to_async
+    def archive_message(self, message_data):
+        
+        if message_data.get("conversation_id", None) == None:
+            raise Exception("No se ha proporcionado el id de la conversacion")
+        
+        conversation = Conversation.objects.get(id = message_data.get("conversation_id", None))
+        conversation.is_archived = True
+        conversation.save()
+
+        serialized_conversation = ArchivedConversationSerializer(conversation).data
+
+        async_to_sync(self.channel_layer.group_send)(
+            str((self.scope["user"]).id),
+            {
+                "type": "message_event",
+                "event_type": "conversation-archived",
+                "data": serialized_conversation,
+            },
+        )
 
 
     async def connect(self):
@@ -81,15 +100,30 @@ class Consumer(AsyncJsonWebsocketConsumer):
                     message_data = json_data.get("message")
                     await self.send_message(message_data)
                 except Exception as e:
-                    print("\n\n\n\nHay error ", e)
                     await self.channel_layer.group_send(
-                        "1",
+                        str((self.scope["user"]).id),
                         {
                             "type": "message_event",
                             "event_type": "error-message",
-                            "data": "SEXTING",
+                            "data": e,
                         },
                     )
+
+            case "archive-conversation":
+                try:
+                    message_data = json_data.get("message")
+                    await self.archive_message(message_data)
+                except Exception as e:
+                    print("error -> ", e)
+                    await self.channel_layer.group_send(
+                        str((self.scope["user"]).id),
+                        {
+                            "type": "message_event",
+                            "event_type": "error-message",
+                            "data": e,
+                        },
+                    )
+
             case _:
                 await self.send_json(
                     content={

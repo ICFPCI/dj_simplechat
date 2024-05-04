@@ -12,6 +12,7 @@ class Conversation(models.Model):
     users = models.ManyToManyField(CustomUser, related_name="conversations")
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
+    is_archived = models.BooleanField(default=False)
 
 
 class Message(models.Model):
