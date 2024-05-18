@@ -4,10 +4,42 @@ from asgiref.sync import sync_to_async, async_to_sync
 import json
 
 from .models import Conversation, Message
-from .serializers import ArchivedConversationSerializer, MessageSerializer
+from .serializers import ArchivedConversationSerializer, ConversationSerializer, MessageSerializer
 
 
 class Consumer(AsyncJsonWebsocketConsumer):
+
+    @database_sync_to_async
+    def start_conversation(self, message_data):
+        if message_data.get("text", None) == None:
+            raise Exception("No se ha proporcionado el texto del mensaje")
+        
+        if message_data.get("contact_user_id", None) == None:
+            raise Exception("No se ha proporcionado el id del contacto")
+        
+        conversation = Conversation()
+        conversation.type = "i"
+        conversation.save()
+        conversation.users.set([(self.scope["user"]).id, int(message_data.get("contact_user_id"))])
+
+
+        message = Message()
+        message.user_id = (self.scope["user"]).id
+        message.text = message_data.get("text")
+        message.conversation_id = conversation.id
+        message.save()
+
+        serialized_conversation = ConversationSerializer(conversation).data
+
+        for user in conversation.users.all():
+            async_to_sync(self.channel_layer.group_send)(
+                str(user.id),
+                {
+                    "type": "message_event",
+                    "event_type": "new-conversation",
+                    "data": serialized_conversation,
+                },
+            )
 
     @database_sync_to_async
     def send_message(self, message_data):
@@ -95,6 +127,20 @@ class Consumer(AsyncJsonWebsocketConsumer):
                         }
                     )
 
+            case "start-conversation":
+                try:
+                    message_data = json_data.get("message")
+                    await self.start_conversation(message_data)
+                except Exception as e:
+                    await self.channel_layer.group_send(
+                        str((self.scope["user"]).id),
+                        {
+                            "type": "message_event",
+                            "event_type": "error-starting-conversation",
+                            "data": e,
+                        },
+                    )
+
             case "send-message":
                 try:
                     message_data = json_data.get("message")
@@ -114,7 +160,6 @@ class Consumer(AsyncJsonWebsocketConsumer):
                     message_data = json_data.get("message")
                     await self.archive_message(message_data)
                 except Exception as e:
-                    print("error -> ", e)
                     await self.channel_layer.group_send(
                         str((self.scope["user"]).id),
                         {

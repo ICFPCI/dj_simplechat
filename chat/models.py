@@ -3,7 +3,7 @@ from django.db import models
 from accounts.models import CustomUser
 
 class Conversation(models.Model):
-    name = models.TextField(null=True)
+    name = models.TextField(null=True, blank=True)
     TYPES = [
         ("i", "individual"),
         ("g", "group")
