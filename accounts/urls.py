@@ -1,13 +1,13 @@
 from django.urls import path, include
-# from .views import CustomUserListApiView
-from .viewsets import CustomUserViewset
 from rest_framework import routers
+from .viewsets import CustomUserViewset
+from .views import getContactList
 
-import accounts.views as views
 
 router = routers.SimpleRouter()
 router.register("profile", CustomUserViewset, basename="users")
 
 urlpatterns = [
+    path("profile/<int:id>/contacts/", getContactList),
     path("", include(router.get_urls())),
 ]

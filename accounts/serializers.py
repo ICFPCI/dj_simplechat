@@ -4,6 +4,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import CustomUser
 
+
 class CustomUserViewSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
@@ -14,6 +15,12 @@ class CustomUserViewSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
         ]
+
+class ContactSerializer(serializers.ModelSerializer):
+    contacts=CustomUserViewSerializer(read_only=True, many=True)
+    class Meta:
+        model=CustomUser
+        fields = ["contacts",]
 
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
